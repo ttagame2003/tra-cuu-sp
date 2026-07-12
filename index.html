@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tra cứu & khớp sản phẩm affiliate</title>
+<style>
+  :root{
+    --ink:#16171D; --ink-soft:#585B6B; --paper:#F4F5F8; --card:#FFFFFF;
+    --line:#E4E6EE; --accent:#0E7C6B; --accent-soft:#E3F4F0;
+    --key:#5B3BE8; --key-soft:#EDE9FD; --warn:#B4610A; --warn-soft:#FCEFD8;
+    --good:#0E7C6B; --mid:#B4610A; --bad:#C0392B;
+    --radius:14px;
+    --mono:'SF Mono','JetBrains Mono',ui-monospace,Menlo,monospace;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--sans);background:var(--paper);color:var(--ink);line-height:1.5;padding:26px 16px 80px}
+  .wrap{max-width:980px;margin:0 auto}
+  header{margin-bottom:18px}
+  .kicker{font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--key);margin-bottom:8px}
+  h1{font-size:25px;font-weight:800;letter-spacing:-.02em;line-height:1.2}
+  .sub{color:var(--ink-soft);font-size:15px;margin-top:8px;max-width:660px}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-top:16px}
+  .step-h{display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap}
+  .num{flex:none;width:26px;height:26px;border-radius:50%;background:var(--ink);color:#fff;font-size:13px;font-weight:700;display:grid;place-items:center}
+  .step-h h2{font-size:16.5px;font-weight:700;letter-spacing:-.01em}
+  .hint{font-size:13.5px;color:var(--ink-soft);margin:4px 0 12px 36px}
+  .pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px}
+  .pill.on{color:var(--accent);background:var(--accent-soft)}
+  .pill.off{color:var(--warn);background:#FCEFD8}
+
+  .field{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  input[type=text],textarea{width:100%;font-family:var(--mono);font-size:12.5px;line-height:1.6;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#FBFBFD;color:var(--ink)}
+  input[type=text]{flex:1;min-width:200px}
+  textarea{min-height:84px;resize:vertical}
+  input:focus,textarea:focus,button:focus-visible,select:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:11px 16px;border-radius:10px;border:1px solid var(--line);background:#fff;font-family:var(--sans);font-size:14px;font-weight:600;color:var(--ink);cursor:pointer;transition:.15s;white-space:nowrap}
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+  .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btn.primary:hover{background:#0a6355;color:#fff}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn svg{width:17px;height:17px}
+  input[type=file]{display:none}
+  .status{font-size:13px;color:var(--ink-soft);margin-top:8px}
+  .status.err{color:#C0392B}
+  .status.ok{color:var(--accent);font-weight:600}
+  details{margin-top:10px}
+  summary{font-size:13px;color:var(--ink-soft);cursor:pointer;user-select:none}
+  summary:hover{color:var(--accent)}
+  .or{margin:10px 0 6px;font-size:11px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.08em}
+  .fcount{font-size:13px;color:var(--ink-soft)}
+
+  .tabs{display:flex;gap:6px;margin-top:20px;background:#EAEBF1;padding:4px;border-radius:12px;width:fit-content;max-width:100%;flex-wrap:wrap}
+  .tab{padding:9px 15px;border-radius:9px;border:none;background:transparent;font-family:var(--sans);font-size:13.5px;font-weight:600;color:var(--ink-soft);cursor:pointer;transition:.15s}
+  .tab.active{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+  .panel{display:none}
+  .panel.active{display:block}
+
+  .go{display:inline-flex;align-items:center;gap:9px;margin-top:16px;padding:14px 26px;border:none;border-radius:11px;background:var(--accent);color:#fff;font-size:15.5px;font-weight:700;cursor:pointer;transition:.15s}
+  .go:hover{background:#0a6355}
+  .go:disabled{opacity:.5;cursor:default}
+
+  #results{margin-top:22px;display:none}
+  .rhead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .rhead h2{font-size:18px;font-weight:800}
+  .stats{font-size:13.5px;color:var(--ink-soft)}
+  .stats .okc{color:var(--accent);font-weight:700}
+  .stats .miss{color:var(--warn);font-weight:700}
+  .bar{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px}
+  .barbtn{padding:9px 14px;border-radius:9px;border:1px solid var(--line);background:#fff;font-size:13.5px;font-weight:600;color:var(--ink);cursor:pointer}
+  .barbtn:hover{border-color:var(--accent);color:var(--accent)}
+  .item{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 14px;margin-bottom:10px}
+  .item.miss{border-color:#EAD3AE;background:#FFFDF8}
+  .fname{font-family:var(--mono);font-size:12px;color:var(--ink-soft);word-break:break-all;margin-bottom:8px}
+  .fname mark{background:var(--key-soft);color:var(--key);font-weight:700;padding:1px 3px;border-radius:4px}
+  .pname{font-size:15px;font-weight:700;margin-bottom:9px;line-height:1.35}
+  .pname.none{color:var(--warn);font-weight:600;font-size:13.5px}
+  .lrow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:7px}
+  .tag{flex:none;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--ink-soft);width:72px}
+  .link{font-family:var(--mono);font-size:12px;color:var(--accent);word-break:break-all;text-decoration:none;flex:1;min-width:0}
+  .link:hover{text-decoration:underline}
+  .copy{flex:none;padding:6px 12px;border-radius:7px;border:1px solid var(--line);background:#fff;font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer}
+  .copy:hover{border-color:var(--accent);color:var(--accent)}
+  .copy.done{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .empty{color:var(--ink-soft);font-size:14px;padding:26px 0;text-align:center}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;margin-top:16px}
+  .gcard{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+  .gcard.miss{border-color:#EAD3AE}
+  .gimg{width:100%;aspect-ratio:1/1;object-fit:cover;background:#EDEEF3;display:block}
+  .gbody{padding:11px 12px;display:flex;flex-direction:column;gap:6px}
+  .gname{font-size:13.5px;font-weight:700;line-height:1.3}
+  .gname.none{color:var(--warn);font-weight:600}
+  .gid{font-family:var(--mono);font-size:11px;color:var(--key);background:var(--key-soft);padding:2px 6px;border-radius:5px;align-self:flex-start}
+  .gact{display:flex;gap:6px;margin-top:2px}
+  .gbtn{flex:1;text-align:center;padding:7px 8px;border-radius:7px;border:1px solid var(--line);background:#fff;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:5px}
+  .gbtn:hover{border-color:var(--accent);color:var(--accent)}
+  .gbtn.done{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  /* matcher */
+  .progwrap{margin-top:14px;display:none}
+  .progbar{height:8px;border-radius:6px;background:#E4E6EE;overflow:hidden}
+  .progfill{height:100%;width:0;background:var(--accent);transition:width .2s}
+  .progtxt{font-size:13px;color:var(--ink-soft);margin-top:6px}
+  .mcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+  .mcard.mid{border-color:#EAD3AE}
+  .mcard.bad{border-color:#E6B5AE;background:#FFF9F8}
+  .mcompare{display:flex;align-items:stretch;gap:10px;margin-bottom:10px}
+  .mcol{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px}
+  .mcol img{width:100%;max-width:220px;aspect-ratio:1/1;object-fit:cover;border-radius:9px;background:#EDEEF3;border:1px solid var(--line);cursor:pointer}
+  .mcol figcaption{font-size:11px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em}
+  .marrow{flex:none;align-self:center;color:var(--ink-soft);font-size:18px;font-weight:700}
+  .fbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .fbtn{padding:8px 13px;border-radius:20px;border:1px solid var(--line);background:#fff;font-family:var(--sans);font-size:13px;font-weight:600;color:var(--ink-soft);cursor:pointer;transition:.15s}
+  .fbtn:hover{border-color:var(--accent)}
+  .fbtn.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .fbtn span{opacity:.7;font-weight:700}
+  .mbody{min-width:0}
+  .mvid{font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);word-break:break-all;margin-bottom:4px}
+  .mname{font-size:14.5px;font-weight:700;line-height:1.3}
+  .mscore{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;margin:5px 0}
+  .mscore.good{color:#fff;background:var(--good)}
+  .mscore.mid{color:#fff;background:var(--mid)}
+  .mscore.bad{color:#fff;background:var(--bad)}
+  .filterbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .fbtn{display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border-radius:9px;border:1px solid var(--line);background:#fff;font-family:var(--sans);font-size:13px;font-weight:600;color:var(--ink-soft);cursor:pointer;transition:.15s}
+  .fbtn:hover{border-color:var(--accent);color:var(--ink)}
+  .fbtn.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .fbtn .fn{opacity:.7;font-weight:700}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .dot.good{background:var(--good)} .dot.mid{background:var(--mid)} .dot.bad{background:var(--bad)}
+  .mrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}
+  select{font-family:var(--sans);font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;max-width:100%}
+  .mlink{font-family:var(--mono);font-size:11.5px;color:var(--accent);word-break:break-all}
+
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:11px 20px;border-radius:10px;font-size:14px;font-weight:600;opacity:0;pointer-events:none;transition:.25s;z-index:9;max-width:90vw;text-align:center}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  footer{margin-top:28px;font-size:12.5px;color:var(--ink-soft);text-align:center;line-height:1.7}
+  @media(max-width:560px){body{padding:20px 13px 70px}h1{font-size:22px}.tag{width:100%}.grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">Affiliate · TikTok Shop</div>
+    <h1>Tra cứu & khớp sản phẩm</h1>
+    <p class="sub">Ghép ảnh với link, tra link theo tên/ID, và khớp video đã cắt với sản phẩm bằng AI hình ảnh. Mở được ở mọi máy.</p>
+  </header>
+
+  <div class="card">
+    <div class="step-h"><span class="num">1</span><h2>Nguồn dữ liệu sản phẩm</h2><span class="pill off" id="dataPill">Chưa có dữ liệu</span></div>
+    <p class="hint">Dán link Google Sheet chứa bảng sản phẩm (ID, tên, link). Công cụ tự đọc bản mới nhất.</p>
+    <div class="field">
+      <input type="text" id="sheetUrl" placeholder="Dán link Google Sheet vào đây...">
+      <button class="btn primary" id="loadSheet">Kết nối</button>
+    </div>
+    <div class="status" id="sheetStatus"></div>
+    <details><summary>Hoặc dán trực tiếp bảng sản phẩm</summary>
+      <textarea id="tableInput" style="margin-top:10px" placeholder="Dán bảng từ Excel, mỗi sản phẩm 1 dòng..."></textarea>
+    </details>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="gallery">Ảnh ↔ Link</button>
+    <button class="tab" data-tab="lookup">Tra theo tên / ID</button>
+    <button class="tab" data-tab="match">Khớp video ↔ ảnh (AI)</button>
+  </div>
+
+  <!-- gallery -->
+  <div class="panel active" id="panel-gallery">
+    <div class="card">
+      <div class="step-h"><span class="num">2</span><h2>Ghép ảnh sản phẩm với link</h2></div>
+      <p class="hint">Chọn thư mục ảnh sản phẩm đã gen (tên file có ID). Bộ ảnh này cũng dùng cho bước khớp video.</p>
+      <div class="field">
+        <label class="btn primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+          Chọn thư mục ảnh
+          <input type="file" id="imgDir" webkitdirectory multiple accept="image/*">
+        </label>
+        <label class="btn">Hoặc chọn từng ảnh<input type="file" id="imgFiles" multiple accept="image/*"></label>
+        <span class="fcount" id="galCount">Chưa chọn ảnh</span>
+      </div>
+    </div>
+    <div id="gallery" class="grid"></div>
+  </div>
+
+  <!-- lookup -->
+  <div class="panel" id="panel-lookup">
+    <div class="card">
+      <div class="step-h"><span class="num">2</span><h2>Tra link từ tên video / mã ID</h2></div>
+      <p class="hint">Máy tính: chọn video. Điện thoại: dán tên file hoặc mã ID.</p>
+      <div class="field">
+        <label class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M13 2v7h7"/></svg> Chọn video<input type="file" id="fileInput" multiple accept="video/*,image/*"></label>
+        <span class="fcount" id="fcount">Chưa chọn file</span>
+      </div>
+      <div class="or">Hoặc dán tên file / mã ID</div>
+      <textarea id="nameInput" placeholder="1731880805624416494"></textarea>
+      <button class="go" id="runBtn">Tra cứu</button>
+    </div>
+    <div id="results">
+      <div class="rhead"><h2>Kết quả</h2><div class="stats" id="stats"></div></div>
+      <div class="bar"><button class="barbtn" id="copyLinks">Copy tất cả link</button><button class="barbtn" id="exportCsv">Tải CSV</button></div>
+      <div id="list"></div>
+    </div>
+  </div>
+
+  <!-- match -->
+  <div class="panel" id="panel-match">
+    <div class="card">
+      <div class="step-h"><span class="num">3</span><h2>Khớp video đã cắt với sản phẩm</h2></div>
+      <p class="hint">Cần: đã nạp bộ ảnh ở thẻ "Ảnh ↔ Link", và có mạng lần đầu để tải mô hình AI (~20MB, sau đó chạy tại chỗ). Nên dùng Chrome/Edge trên máy tính.</p>
+      <div class="field">
+        <label class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg> Chọn thư mục video cuối<input type="file" id="vidDir" webkitdirectory multiple accept="video/*"></label>
+        <label class="btn">Hoặc chọn từng video<input type="file" id="vidFiles" multiple accept="video/*"></label>
+        <span class="fcount" id="vidCount">Chưa chọn video</span>
+      </div>
+      <button class="go" id="matchBtn" disabled>Bắt đầu khớp</button>
+      <div class="progwrap" id="progwrap"><div class="progbar"><div class="progfill" id="progfill"></div></div><div class="progtxt" id="progtxt"></div></div>
+    </div>
+    <div id="matchResults">
+      <div class="rhead" id="mrhead" style="display:none"><h2>Kết quả khớp</h2><div class="stats" id="mstats"></div></div>
+      <div class="bar" id="mbar" style="display:none"><button class="barbtn" id="mCopy">Copy link theo thứ tự</button><button class="barbtn" id="mCsv">Tải CSV khớp</button></div>
+      <div class="filterbar" id="mfilter" style="display:none">
+        <button class="fbtn active" data-f="all">Tất cả <span class="fn" id="fn-all"></span></button>
+        <button class="fbtn" data-f="good"><span class="dot good"></span>Khớp chắc <span class="fn" id="fn-good"></span></button>
+        <button class="fbtn" data-f="mid"><span class="dot mid"></span>Cần kiểm tra <span class="fn" id="fn-mid"></span></button>
+        <button class="fbtn" data-f="bad"><span class="dot bad"></span>Khớp yếu <span class="fn" id="fn-bad"></span></button>
+      </div>
+      <div class="fbar" id="mfilter" style="display:none">
+        <button class="fbtn active" data-f="all">Tất cả <span data-c></span></button>
+        <button class="fbtn" data-f="good">🟢 Khớp chắc <span data-c></span></button>
+        <button class="fbtn" data-f="mid">🟡 Nên kiểm tra <span data-c></span></button>
+        <button class="fbtn" data-f="bad">🔴 Khớp yếu <span data-c></span></button>
+      </div>
+      <div id="mlist"></div>
+    </div>
+  </div>
+
+  <footer>Chạy hoàn toàn trên trình duyệt · dữ liệu không gửi đi đâu.<br>Lưu bookmark để mở nhanh ở mọi máy.</footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+  const SHEET_URL="";
+  const TFJS="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js";
+  const MOBILENET="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js";
+  const FRAMES=6;              // số khung lấy mỗi video
+  const T_GOOD=0.76, T_MID=0.55;  // ngưỡng điểm "khớp chắc" / "cần kiểm tra"
+  const MARGIN_MIN=0.06;          // ảnh nhất phải hơn ảnh nhì tối thiểu chừng này
+
+  const $=id=>document.getElementById(id);
+  const REGION="VN";
+  const buildLink=id=>`https://shop.tiktok.com/view/product/${id}?region=${REGION}&locale=vi`;
+  const extractId=s=>{const m=String(s).match(/\d{15,20}/g);return m?m.sort((a,b)=>b.length-a.length)[0]:null};
+  const IMG_RE=/\.(jpe?g|png|webp|heic|gif|bmp)$/i, VID_RE=/\.(mp4|mov|m4v|avi|mkv|webm)$/i;
+  let products={}, pickedFiles=[], galFiles=[], vidFiles=[];
+
+  // ---- CSV / data ----
+  function parseCSV(t){const R=[];let r=[],c="",q=false;for(let i=0;i<t.length;i++){const ch=t[i];if(q){if(ch==='"'){if(t[i+1]==='"'){c+='"';i++}else q=false}else c+=ch}else{if(ch==='"')q=true;else if(ch===','){r.push(c);c=""}else if(ch==='\n'){r.push(c);R.push(r);r=[];c=""}else if(ch==='\r'){}else c+=ch}}if(c!==""||r.length){r.push(c);R.push(r)}return R}
+  function rowsToProducts(rows){const map={};rows.forEach(cells=>{let id=null;for(const c of cells){const x=extractId(c);if(x){id=x;break}}if(!id)return;let tk="",aff="",nm="";cells.forEach(c=>{const u=(String(c).match(/https?:\/\/[^\s,]+/)||[])[0];if(u){if(/shop\.tiktok\.com\/view\/product/i.test(u))tk=u;else if(/(vt|s|vm)\.tiktok\.com|tiktok\.com\/t\//i.test(u))aff=u}});for(const c of cells){const t=String(c).trim();if(!t||t.length<4)continue;if(/^https?:\/\//i.test(t))continue;if(/^\d[\d\-~:.\s]*$/.test(t))continue;if(/SẢN PHẨM:|₫|ROAS|GPM|Doanh thu|Giá bán/i.test(t))continue;nm=t;break}map[id]={name:nm,tiktok:tk||buildLink(id),aff}});return map}
+  function setDataPill(n){const p=$("dataPill");if(n>0){p.className="pill on";p.textContent=`Đã tải ${n} sản phẩm`}else{p.className="pill off";p.textContent="Chưa có dữ liệu"}}
+  function toCsvUrl(url){url=(url||"").trim();if(!url)return"";if(/output=csv|tqx=out:csv|\/pub\?/.test(url))return url;const m=url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);if(!m)return url;const gid=(url.match(/[#&?]gid=(\d+)/)||[])[1]||"0";return `https://docs.google.com/spreadsheets/d/${m[1]}/gviz/tq?tqx=out:csv&gid=${gid}`}
+  async function fetchCsv(cu){
+    try{const r=await fetch(cu);if(r.ok)return await r.text()}catch(e){}
+    // trình duyệt chặn tải trực tiếp -> thử qua cầu nối CORS công khai
+    try{const r=await fetch("https://api.allorigins.win/raw?url="+encodeURIComponent(cu));if(r.ok)return await r.text()}catch(e){}
+    return null;
+  }
+  async function loadFromSheet(url,silent){
+    const cu=toCsvUrl(url);if(!cu){if(!silent)stat("Link không hợp lệ","err");return}
+    stat("Đang tải dữ liệu...","");
+    const text=await fetchCsv(cu);
+    if(text==null){stat("Không tải được. Nếu đang xem trong bản preview thì hãy đăng trang lên web (Netlify/GitHub) rồi mở bằng địa chỉ web. Hoặc dùng ô 'Dán trực tiếp bảng sản phẩm' bên dưới.","err");return}
+    products=rowsToProducts(parseCSV(text));
+    const n=Object.keys(products).length;setDataPill(n);
+    stat(n?`Đã tải ${n} sản phẩm`:"Tải được nhưng không thấy dòng nào có ID sản phẩm",n?"ok":"err");
+    if(galFiles.length)renderGallery(galFiles);
+    try{const u=new URL(location.href);u.searchParams.set("sheet",url);history.replaceState(null,"",u)}catch(e){}
+  }
+  function stat(m,c){const s=$("sheetStatus");s.textContent=m;s.className="status"+(c?" "+c:"")}
+  $("loadSheet").addEventListener("click",()=>loadFromSheet($("sheetUrl").value,false));
+  $("sheetUrl").addEventListener("keydown",e=>{if(e.key==="Enter")loadFromSheet($("sheetUrl").value,false)});
+  $("tableInput").addEventListener("input",()=>{const v=$("tableInput").value;if(v.trim()){products=rowsToProducts(v.split(/\r?\n/).map(l=>l.split(/\t|;|\s{2,}|,/)));setDataPill(Object.keys(products).length);if(galFiles.length)renderGallery(galFiles)}});
+
+  // ---- tabs ----
+  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));t.classList.add("active");$("panel-"+t.dataset.tab).classList.add("active")}));
+
+  // ---- gallery ----
+  function onImgs(files){galFiles=Array.from(files||[]).filter(f=>IMG_RE.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));$("galCount").textContent=galFiles.length?`${galFiles.length} ảnh`:"Không có ảnh hợp lệ";renderGallery(galFiles);updateMatchReady()}
+  $("imgDir").addEventListener("change",e=>onImgs(e.target.files));
+  $("imgFiles").addEventListener("change",e=>onImgs(e.target.files));
+  function renderGallery(files){const g=$("gallery");g.innerHTML="";if(!files||!files.length){g.innerHTML='<div class="empty">Chọn thư mục ảnh sản phẩm để ghép với link.</div>';return}files.forEach(f=>{const id=extractId(f.name);const info=id?products[id]:null;const link=id?(info?.tiktok||buildLink(id)):"";const url=URL.createObjectURL(f);const card=document.createElement("div");card.className="gcard"+(id?"":" miss");const nm=info?.name||(id?"(chưa có tên trong dữ liệu)":"⚠ không thấy ID trong tên ảnh");card.innerHTML=`<img class="gimg" src="${url}" loading="lazy" alt=""><div class="gbody"><div class="gname ${info?.name?"":"none"}">${esc(nm)}</div>${id?`<span class="gid">${id}</span>`:""}${id?`<div class="gact"><button class="gbtn" data-c="${escA(link)}">Copy link SP</button>${info?.aff?`<button class="gbtn" data-c="${escA(info.aff)}">Copy AFF</button>`:`<a class="gbtn" href="${escA(link)}" target="_blank" rel="noopener">Mở</a>`}</div>`:""}</div>`;g.appendChild(card)});g.querySelectorAll(".gbtn[data-c]").forEach(b=>b.addEventListener("click",()=>{cp(b.dataset.c);const o=b.textContent;b.textContent="✓ Đã copy";b.classList.add("done");setTimeout(()=>{b.textContent=o;b.classList.remove("done")},1200)}))}
+
+  // ---- lookup ----
+  $("fileInput").addEventListener("change",e=>{pickedFiles=Array.from(e.target.files||[]).map(f=>f.name).filter(n=>/\.(mp4|mov|m4v|avi|mkv|webm|jpe?g|png|heic)$/i.test(n));$("fcount").textContent=pickedFiles.length?`Đã chọn ${pickedFiles.length} file`:"Không có file hợp lệ"});
+  function runLookup(){const pasted=$("nameInput").value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);const seen=new Set();const files=[...pickedFiles,...pasted].filter(n=>{if(seen.has(n))return false;seen.add(n);return true});const list=$("list");list.innerHTML="";$("results").style.display="block";window.__rows=[];if(!files.length){list.innerHTML='<div class="empty">Chọn video hoặc dán tên file / mã ID.</div>';$("stats").textContent="";return}let ok=0,miss=0;files.forEach(name=>{const id=extractId(name);const info=id?products[id]:null;const link=id?(info?.tiktok||buildLink(id)):"";window.__rows.push({name,id:id||"",name_sp:info?.name||"",link,aff:info?.aff||""});const el=document.createElement("div");el.className="item"+(id?"":" miss");let fn=esc(name);if(id)fn=fn.replace(id,`<mark>${id}</mark>`);let html=`<div class="fname">${fn}</div>`;if(!id){miss++;html+=`<div class="pname none">⚠ Không thấy mã ID</div>`}else{ok++;html+=info&&info.name?`<div class="pname">${esc(info.name)}</div>`:`<div class="pname none">Chưa có tên — dùng link dựng từ ID</div>`;html+=lrow("Sản phẩm",link);if(info&&info.aff)html+=lrow("Link AFF",info.aff)}el.innerHTML=html;list.appendChild(el)});list.querySelectorAll(".copy").forEach(b=>b.addEventListener("click",()=>{cp(b.dataset.url);const o=b.textContent;b.textContent="✓ Đã copy";b.classList.add("done");setTimeout(()=>{b.textContent=o;b.classList.remove("done")},1200)}));$("stats").innerHTML=`<span class="okc">${ok} tra được</span>`+(miss?` · <span class="miss">${miss} thiếu mã</span>`:"")+` · tổng ${files.length}`;$("results").scrollIntoView({behavior:"smooth",block:"start"})}
+  function lrow(tag,url){return `<div class="lrow"><span class="tag">${tag}</span><a class="link" href="${escA(url)}" target="_blank" rel="noopener">${esc(url)}</a><button class="copy" data-url="${escA(url)}">Copy</button></div>`}
+  $("runBtn").addEventListener("click",runLookup);
+  $("copyLinks").addEventListener("click",()=>{const r=window.__rows||[];const L=r.filter(x=>x.link).map(x=>x.aff||x.link);if(!L.length){toast("Chưa có link");return}cp(L.join("\n"));toast(`Đã copy ${L.length} link`)});
+  $("exportCsv").addEventListener("click",()=>{const r=window.__rows||[];if(!r.length){toast("Chưa có dữ liệu");return}csvDownload(["Ten video","Ma ID","Ten san pham","Link san pham","Link AFF"],r.map(x=>[x.name,x.id,x.name_sp,x.link,x.aff]),"tra-cuu.csv")});
+
+  // ================= AI MATCHER =================
+  let model=null, modelLoading=null, imgEmb=null;
+
+  function onVids(files){vidFiles=Array.from(files||[]).filter(f=>VID_RE.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));$("vidCount").textContent=vidFiles.length?`${vidFiles.length} video`:"Không có video hợp lệ";updateMatchReady()}
+  $("vidDir").addEventListener("change",e=>onVids(e.target.files));
+  $("vidFiles").addEventListener("change",e=>onVids(e.target.files));
+  function updateMatchReady(){$("matchBtn").disabled=!(galFiles.length&&vidFiles.length)}
+
+  function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement("script");s.src=src;s.onload=res;s.onerror=()=>rej(new Error("Không tải được "+src));document.head.appendChild(s)})}
+  async function ensureModel(){if(model)return;if(!modelLoading)modelLoading=(async()=>{prog(2,"Đang tải mô hình AI (lần đầu)...");if(!window.tf)await loadScript(TFJS);if(!window.mobilenet)await loadScript(MOBILENET);model=await window.mobilenet.load({version:2,alpha:1.0})})();await modelLoading}
+
+  function l2(v){let s=0;for(const x of v)s+=x*x;s=Math.sqrt(s)||1;return v.map(x=>x/s)}
+  function cos(a,b){let s=0;for(let i=0;i<a.length;i++)s+=a[i]*b[i];return s}
+  async function embedEl(el){const t=model.infer(el,true);const d=await t.data();t.dispose();return l2(Array.from(d))}
+  function fileToImg(f){return new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=URL.createObjectURL(f)})}
+
+  function thumbFromVideo(v){try{const vw=v.videoWidth||16,vh=v.videoHeight||9;const W=240,H=Math.round(W*vh/vw)||240;const c=document.createElement("canvas");c.width=W;c.height=H;c.getContext("2d").drawImage(v,0,0,W,H);return c.toDataURL("image/jpeg",0.7)}catch(e){return""}}
+  async function embedVideo(file){
+    const embs=[]; let thumb="";
+    await new Promise(resolve=>{
+      const v=document.createElement("video");v.muted=true;v.preload="auto";v.playsInline=true;
+      const cv=document.createElement("canvas");cv.width=224;cv.height=224;const ctx=cv.getContext("2d");
+      let times=[],idx=0,done=false,thumbIdx=0;
+      const fin=()=>{if(done)return;done=true;try{URL.revokeObjectURL(v.src)}catch(e){}resolve()};
+      v.onloadedmetadata=()=>{const d=(v.duration&&isFinite(v.duration))?v.duration:0;if(d>0){for(let i=0;i<FRAMES;i++)times.push(d*(i+0.5)/FRAMES)}else times=[0.1];thumbIdx=Math.floor(times.length/2);seek()};
+      function seek(){if(idx>=times.length){fin();return}try{v.currentTime=Math.min(times[idx],(v.duration||1)-0.05)}catch(e){fin()}}
+      v.onseeked=async()=>{try{ctx.drawImage(v,0,0,224,224);embs.push(await embedEl(cv));if(idx===thumbIdx&&!thumb)thumb=thumbFromVideo(v)}catch(e){}idx++;seek()};
+      v.onerror=fin;setTimeout(fin,20000);
+      v.src=URL.createObjectURL(file);
+    });
+    return {embs,thumb};
+  }
+
+  function prog(pct,txt){$("progwrap").style.display="block";$("progfill").style.width=Math.max(0,Math.min(100,pct))+"%";if(txt!=null)$("progtxt").textContent=txt}
+
+  $("matchBtn").addEventListener("click",async()=>{
+    if(!galFiles.length){toast("Chưa nạp ảnh ở thẻ Ảnh ↔ Link");return}
+    if(!vidFiles.length){toast("Chưa chọn video");return}
+    $("matchBtn").disabled=true;
+    try{
+      await ensureModel();
+      // embed ảnh sản phẩm (chỉ ảnh có ID)
+      prog(8,"Đang phân tích ảnh sản phẩm...");
+      imgEmb=[];
+      for(let i=0;i<galFiles.length;i++){
+        const f=galFiles[i];const id=extractId(f.name);if(!id)continue;
+        const info=products[id];
+        try{const im=await fileToImg(f);const emb=await embedEl(im);imgEmb.push({id,name:info?.name||"",link:info?.tiktok||buildLink(id),aff:info?.aff||"",emb,url:im.src})}catch(e){}
+        prog(8+12*(i+1)/galFiles.length);
+      }
+      if(!imgEmb.length){toast("Không có ảnh nào đọc được ID để so khớp");$("matchBtn").disabled=false;return}
+      // khớp từng video
+      const results=[];
+      for(let i=0;i<vidFiles.length;i++){
+        prog(20+78*i/vidFiles.length,`Đang khớp video ${i+1}/${vidFiles.length}...`);
+        const {embs,thumb}=await embedVideo(vidFiles[i]);
+        let best=null,second=-1;
+        imgEmb.forEach(p=>{let s=-1;for(const fe of embs){const c=cos(fe,p.emb);if(c>s)s=c}if(!best||s>best.score){second=best?best.score:-1;best={p,score:s}}else if(s>second)second=s});
+        results.push({video:vidFiles[i].name,file:vidFiles[i],videoThumb:thumb,best,second:second<0?0:second,embOK:embs.length>0});
+      }
+      prog(100,"Xong");
+      renderMatches(results);
+    }catch(e){
+      prog(0,"Lỗi: "+(e.message||e)+". Kiểm tra mạng để tải mô hình, hoặc thử lại bằng Chrome/Edge.");
+    }finally{$("matchBtn").disabled=false}
+  });
+
+  function classify(sc,margin){
+    if(sc<T_MID) return {cls:"bad",label:"khớp yếu, chọn tay"};
+    if(sc>=T_GOOD && margin>=MARGIN_MIN) return {cls:"good",label:"khớp chắc"};
+    const note = margin<MARGIN_MIN ? " · sát ảnh nhì, dễ nhầm" : "";
+    return {cls:"mid",label:"nên kiểm tra"+note};
+  }
+  function renderMatches(results){
+    results.sort((a,b)=>((b.best?b.best.score:0)-(a.best?a.best.score:0)));  // cao xuống thấp
+    window.__match=results;
+    const box=$("mlist");box.innerHTML="";
+    let good=0,mid=0,bad=0;
+    results.forEach((r,i)=>{
+      const b=r.best;const sc=b?b.score:0;const margin=b?(sc-(r.second||0)):0;
+      const {cls,label}=classify(sc,margin);
+      r._cls=cls;
+      if(cls==="good")good++;else if(cls==="mid")mid++;else bad++;
+      const opts=imgEmb.map(p=>`<option value="${p.id}" ${b&&p.id===b.p.id?"selected":""}>${esc((p.name||p.id).slice(0,60))}</option>`).join("");
+      const el=document.createElement("div");el.className="mcard"+(cls==="mid"?" mid":cls==="bad"?" bad":"");
+      el.dataset.i=i;el.dataset.cls=cls;
+      el.innerHTML=
+        `<div class="mvid">${esc(r.video)}</div>`+
+        `<div class="mcompare">`+
+          `<figure class="mcol"><img data-vid src="${r.videoThumb||""}" title="Bấm để mở video" alt=""><figcaption>Video</figcaption></figure>`+
+          `<div class="marrow">↔</div>`+
+          `<figure class="mcol"><img data-img src="${b?b.p.url:""}" title="Bấm để mở ảnh" alt=""><figcaption>Ảnh khớp</figcaption></figure>`+
+        `</div>`+
+        `<div class="mbody">`+
+          `<div class="mname" data-name>${b?esc(b.p.name||b.p.id):"—"}</div>`+
+          `<span class="mscore ${cls}">Độ khớp ${(sc*100).toFixed(0)}% · ${label}</span>`+
+          `<div class="mrow"><select data-sel>${opts}</select></div>`+
+          `<div class="mrow"><span class="mlink" data-link>${b?esc(b.p.link):""}</span><button class="copy" data-copy>Copy link</button></div>`+
+        `</div>`;
+      box.appendChild(el);
+    });
+    // sự kiện chọn tay + copy
+    box.querySelectorAll(".mcard").forEach(card=>{
+      const i=+card.dataset.i;
+      const sel=card.querySelector("[data-sel]");
+      sel.addEventListener("change",()=>{
+        const p=imgEmb.find(x=>x.id===sel.value);if(!p)return;
+        results[i].best={p,score:results[i].best?results[i].best.score:0};results[i].manual=true;
+        card.querySelector("[data-name]").textContent=p.name||p.id;
+        card.querySelector("[data-link]").textContent=p.link;
+        card.querySelector("[data-img]").src=p.url;
+      });
+      const vimg=card.querySelector("[data-vid]");
+      if(vimg)vimg.addEventListener("click",()=>{const f=results[i].file;if(f)window.open(URL.createObjectURL(f),"_blank")});
+      const pimg=card.querySelector("[data-img]");
+      if(pimg)pimg.addEventListener("click",()=>{const p=results[i].best?results[i].best.p:null;if(p&&p.url)window.open(p.url,"_blank")});
+      card.querySelector("[data-copy]").addEventListener("click",()=>{const p=results[i].best?results[i].best.p:null;if(!p)return;cp(p.aff||p.link);const btn=card.querySelector("[data-copy]");const o=btn.textContent;btn.textContent="✓";btn.classList.add("done");setTimeout(()=>{btn.textContent=o;btn.classList.remove("done")},1000)});
+    });
+    $("mrhead").style.display="flex";$("mbar").style.display="flex";$("mfilter").style.display="flex";
+    $("mstats").innerHTML=`<span class="okc">${good} khớp chắc</span>`+((mid+bad)?` · <span class="miss">${mid+bad} cần kiểm tra</span>`:"")+` · tổng ${results.length}`;
+    $("fn-all").textContent=results.length;$("fn-good").textContent=good;$("fn-mid").textContent=mid;$("fn-bad").textContent=bad;
+    document.querySelectorAll("#mfilter .fbtn").forEach(x=>x.classList.toggle("active",x.dataset.f==="all"));
+    applyFilter("all");
+    $("mrhead").scrollIntoView({behavior:"smooth",block:"start"});
+  }
+  function applyFilter(f){document.querySelectorAll("#mlist .mcard").forEach(c=>{c.style.display=(f==="all"||c.dataset.cls===f)?"":"none"})}
+  document.querySelectorAll("#mfilter .fbtn").forEach(btn=>btn.addEventListener("click",()=>{document.querySelectorAll("#mfilter .fbtn").forEach(x=>x.classList.remove("active"));btn.classList.add("active");applyFilter(btn.dataset.f)}));
+  $("mCopy").addEventListener("click",()=>{const r=window.__match||[];const L=r.filter(x=>x.best).map(x=>x.best.p.aff||x.best.p.link);if(!L.length){toast("Chưa có link");return}cp(L.join("\n"));toast(`Đã copy ${L.length} link`)});
+  $("mCsv").addEventListener("click",()=>{const r=window.__match||[];if(!r.length){toast("Chưa có dữ liệu");return}csvDownload(["Ten video","Do khop %","Ma ID","Ten san pham","Link san pham","Link AFF","Chon tay"],r.map(x=>{const p=x.best?x.best.p:{};return[x.video,x.best?(x.best.score*100).toFixed(0):"",p.id||"",p.name||"",p.link||"",p.aff||"",x.manual?"co":""]}),"khop-video.csv")});
+
+  // ---- shared ----
+  function csvDownload(head,rows,fname){const e=v=>`"${String(v==null?"":v).replace(/"/g,'""')}"`;const csv="\uFEFF"+[head.map(e).join(",")].concat(rows.map(r=>r.map(e).join(","))).join("\r\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download=fname;a.click();URL.revokeObjectURL(a.href);toast("Đã tải "+fname)}
+  function cp(t){if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(t).catch(()=>fb(t))}else fb(t)}
+  function fb(t){const a=document.createElement("textarea");a.value=t;a.style.position="fixed";a.style.opacity="0";document.body.appendChild(a);a.select();try{document.execCommand("copy")}catch(e){}document.body.removeChild(a)}
+  let tt;function toast(m){const t=$("toast");t.textContent=m;t.classList.add("show");clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("show"),2000)}
+  function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+  function escA(s){return esc(s)}
+
+  renderGallery([]);
+  (function init(){let url="";try{url=new URL(location.href).searchParams.get("sheet")||""}catch(e){}if(!url)url=SHEET_URL;if(url){$("sheetUrl").value=url;loadFromSheet(url,true)}})();
+})();
+</script>
+</body>
+</html>
