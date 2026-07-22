@@ -212,8 +212,8 @@
       <div class="step-h"><span class="num">3</span><h2>Khớp video đã cắt với sản phẩm</h2></div>
       <p class="hint">Cần: đã nạp bộ ảnh ở thẻ "Ảnh ↔ Link", và có mạng lần đầu để tải mô hình AI (~20MB, sau đó chạy tại chỗ). Nên dùng Chrome/Edge trên máy tính.</p>
       <div class="field">
-        <label class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg> Chọn thư mục video cuối<input type="file" id="vidDir" webkitdirectory multiple accept="video/*"></label>
-        <label class="btn">Hoặc chọn từng video<input type="file" id="vidFiles" multiple accept="video/*"></label>
+        <button class="btn primary" id="pickVidFolder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg> Chọn thư mục video (cho phép sắp xếp)</button>
+        <label class="btn">Hoặc chọn video (chỉ khớp)<input type="file" id="vidFiles" multiple accept="video/*"></label>
         <span class="fcount" id="vidCount">Chưa chọn video</span>
       </div>
       <button class="go" id="matchBtn" disabled>Bắt đầu khớp</button>
@@ -221,7 +221,7 @@
     </div>
     <div id="matchResults">
       <div class="rhead" id="mrhead" style="display:none"><h2>Kết quả khớp</h2><div class="stats" id="mstats"></div></div>
-      <div class="bar" id="mbar" style="display:none"><button class="barbtn" id="mCopy">Copy link theo thứ tự</button><button class="barbtn" id="mCsv">Tải CSV khớp</button></div>
+      <div class="bar" id="mbar" style="display:none"><button class="barbtn" id="mCopy">Copy link theo thứ tự</button><button class="barbtn" id="mCsv">Tải CSV khớp</button><button class="barbtn" id="mOrganize" style="display:none">📁 Tạo thư mục theo ID & chuyển video</button></div>
       <div class="filterbar" id="mfilter" style="display:none">
         <button class="fbtn active" data-f="all">Tất cả <span class="fn" id="fn-all"></span></button>
         <button class="fbtn" data-f="good"><span class="dot good"></span>Khớp chắc <span class="fn" id="fn-good"></span></button>
@@ -257,7 +257,7 @@
   const buildLink=id=>`https://shop.tiktok.com/view/product/${id}?region=${REGION}&locale=vi`;
   const extractId=s=>{const m=String(s).match(/\d{15,20}/g);return m?m.sort((a,b)=>b.length-a.length)[0]:null};
   const IMG_RE=/\.(jpe?g|png|webp|heic|gif|bmp)$/i, VID_RE=/\.(mp4|mov|m4v|avi|mkv|webm)$/i;
-  let products={}, pickedFiles=[], galFiles=[], vidFiles=[];
+  let products={}, pickedFiles=[], galFiles=[], vidItems=[], vidDirHandle=null;
 
   // ---- CSV / data ----
   function parseCSV(t){const R=[];let r=[],c="",q=false;for(let i=0;i<t.length;i++){const ch=t[i];if(q){if(ch==='"'){if(t[i+1]==='"'){c+='"';i++}else q=false}else c+=ch}else{if(ch==='"')q=true;else if(ch===','){r.push(c);c=""}else if(ch==='\n'){r.push(c);R.push(r);r=[];c=""}else if(ch==='\r'){}else c+=ch}}if(c!==""||r.length){r.push(c);R.push(r)}return R}
@@ -306,10 +306,28 @@
   // ================= AI MATCHER =================
   let model=null, modelLoading=null, imgEmb=null;
 
-  function onVids(files){vidFiles=Array.from(files||[]).filter(f=>VID_RE.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));$("vidCount").textContent=vidFiles.length?`${vidFiles.length} video`:"Không có video hợp lệ";updateMatchReady()}
-  $("vidDir").addEventListener("change",e=>onVids(e.target.files));
+  async function pickVidFolder(){
+    if(!window.showDirectoryPicker){toast("Cần Chrome hoặc Edge trên máy tính");return}
+    let dir;try{dir=await window.showDirectoryPicker({mode:"readwrite"})}catch(e){return}
+    vidDirHandle=dir;
+    const items=[];
+    for await(const [name,handle] of dir.entries()){if(handle.kind==="file"&&VID_RE.test(name))items.push({name,handle})}
+    items.sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+    $("vidCount").textContent="Đang đọc "+items.length+" video...";
+    for(const it of items){try{it.file=await it.handle.getFile()}catch(e){}}
+    vidItems=items.filter(it=>it.file);
+    $("vidCount").textContent=vidItems.length?`${vidItems.length} video (có thể sắp xếp)`:"Không có video hợp lệ";
+    updateMatchReady();
+  }
+  $("pickVidFolder").addEventListener("click",pickVidFolder);
+  function onVids(files){
+    vidDirHandle=null;
+    vidItems=Array.from(files||[]).filter(f=>VID_RE.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(f=>({name:f.name,file:f,handle:null}));
+    $("vidCount").textContent=vidItems.length?`${vidItems.length} video (chỉ khớp, không sắp xếp)`:"Không có video hợp lệ";
+    updateMatchReady();
+  }
   $("vidFiles").addEventListener("change",e=>onVids(e.target.files));
-  function updateMatchReady(){$("matchBtn").disabled=!(galFiles.length&&vidFiles.length)}
+  function updateMatchReady(){$("matchBtn").disabled=!(galFiles.length&&vidItems.length)}
 
   function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement("script");s.src=src;s.onload=res;s.onerror=()=>rej(new Error("Không tải được "+src));document.head.appendChild(s)})}
   async function ensureModel(){if(model)return;if(!modelLoading)modelLoading=(async()=>{prog(2,"Đang tải mô hình AI (lần đầu)...");if(!window.tf)await loadScript(TFJS);if(!window.mobilenet)await loadScript(MOBILENET);model=await window.mobilenet.load({version:2,alpha:1.0})})();await modelLoading}
@@ -340,7 +358,7 @@
 
   $("matchBtn").addEventListener("click",async()=>{
     if(!galFiles.length){toast("Chưa nạp ảnh ở thẻ Ảnh ↔ Link");return}
-    if(!vidFiles.length){toast("Chưa chọn video");return}
+    if(!vidItems.length){toast("Chưa chọn video");return}
     $("matchBtn").disabled=true;
     try{
       await ensureModel();
@@ -356,12 +374,13 @@
       if(!imgEmb.length){toast("Không có ảnh nào đọc được ID để so khớp");$("matchBtn").disabled=false;return}
       // khớp từng video
       const results=[];
-      for(let i=0;i<vidFiles.length;i++){
-        prog(20+78*i/vidFiles.length,`Đang khớp video ${i+1}/${vidFiles.length}...`);
-        const {embs,thumb}=await embedVideo(vidFiles[i]);
+      for(let i=0;i<vidItems.length;i++){
+        const it=vidItems[i];
+        prog(20+78*i/vidItems.length,`Đang khớp video ${i+1}/${vidItems.length}...`);
+        const {embs,thumb}=await embedVideo(it.file);
         let best=null,second=-1;
         imgEmb.forEach(p=>{let s=-1;for(const fe of embs){const c=cos(fe,p.emb);if(c>s)s=c}if(!best||s>best.score){second=best?best.score:-1;best={p,score:s}}else if(s>second)second=s});
-        results.push({video:vidFiles[i].name,file:vidFiles[i],videoThumb:thumb,best,second:second<0?0:second,embOK:embs.length>0});
+        results.push({video:it.name,file:it.file,handle:it.handle,videoThumb:thumb,best,second:second<0?0:second,embOK:embs.length>0});
       }
       prog(100,"Xong");
       renderMatches(results);
@@ -422,6 +441,7 @@
       card.querySelector("[data-copy]").addEventListener("click",()=>{const p=results[i].best?results[i].best.p:null;if(!p)return;cp(p.aff||p.link);const btn=card.querySelector("[data-copy]");const o=btn.textContent;btn.textContent="✓";btn.classList.add("done");setTimeout(()=>{btn.textContent=o;btn.classList.remove("done")},1000)});
     });
     $("mrhead").style.display="flex";$("mbar").style.display="flex";$("mfilter").style.display="flex";
+    $("mOrganize").style.display=(vidDirHandle&&results.some(r=>r.handle))?"":"none";
     $("mstats").innerHTML=`<span class="okc">${good} khớp chắc</span>`+((mid+bad)?` · <span class="miss">${mid+bad} cần kiểm tra</span>`:"")+` · tổng ${results.length}`;
     $("fn-all").textContent=results.length;$("fn-good").textContent=good;$("fn-mid").textContent=mid;$("fn-bad").textContent=bad;
     document.querySelectorAll("#mfilter .fbtn").forEach(x=>x.classList.toggle("active",x.dataset.f==="all"));
@@ -432,6 +452,30 @@
   document.querySelectorAll("#mfilter .fbtn").forEach(btn=>btn.addEventListener("click",()=>{document.querySelectorAll("#mfilter .fbtn").forEach(x=>x.classList.remove("active"));btn.classList.add("active");applyFilter(btn.dataset.f)}));
   $("mCopy").addEventListener("click",()=>{const r=window.__match||[];const L=r.filter(x=>x.best).map(x=>x.best.p.aff||x.best.p.link);if(!L.length){toast("Chưa có link");return}cp(L.join("\n"));toast(`Đã copy ${L.length} link`)});
   $("mCsv").addEventListener("click",()=>{const r=window.__match||[];if(!r.length){toast("Chưa có dữ liệu");return}csvDownload(["Ten video","Do khop %","Ma ID","Ten san pham","Link san pham","Link AFF","Chon tay"],r.map(x=>{const p=x.best?x.best.p:{};return[x.video,x.best?(x.best.score*100).toFixed(0):"",p.id||"",p.name||"",p.link||"",p.aff||"",x.manual?"co":""]}),"khop-video.csv")});
+
+  async function moveInto(dirHandle, fileHandle, subName){
+    const sub=await dirHandle.getDirectoryHandle(subName,{create:true});
+    if(typeof fileHandle.move==="function"){ await fileHandle.move(sub, fileHandle.name); return; }
+    // dự phòng: chép sang thư mục con rồi xoá bản gốc
+    const file=await fileHandle.getFile();
+    const nh=await sub.getFileHandle(fileHandle.name,{create:true});
+    const w=await nh.createWritable(); await w.write(file); await w.close();
+    await dirHandle.removeEntry(fileHandle.name);
+  }
+  $("mOrganize").addEventListener("click",async()=>{
+    if(!vidDirHandle){toast("Cần chọn video bằng nút 'Chọn thư mục video' để có quyền sắp xếp");return}
+    const rows=(window.__match||[]).filter(r=>r.handle&&r.best&&r.best.p&&r.best.p.id&&!r._moved);
+    if(!rows.length){toast("Không có video nào để sắp xếp");return}
+    if(!confirm(`Sẽ tạo thư mục theo ID và CHUYỂN ${rows.length} video vào (video rời khỏi thư mục gốc). Tiếp tục?`))return;
+    $("mOrganize").disabled=true;
+    let ok=0,fail=0;
+    for(const r of rows){
+      try{ await moveInto(vidDirHandle, r.handle, r.best.p.id); r._moved=true; ok++; }
+      catch(e){ console.error(e); fail++; }
+    }
+    $("mOrganize").disabled=false;
+    toast(`Đã chuyển ${ok} video vào thư mục theo ID`+(fail?` · ${fail} lỗi`:""));
+  });
 
   // ---- shared ----
   function csvDownload(head,rows,fname){const e=v=>`"${String(v==null?"":v).replace(/"/g,'""')}"`;const csv="\uFEFF"+[head.map(e).join(",")].concat(rows.map(r=>r.map(e).join(","))).join("\r\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download=fname;a.click();URL.revokeObjectURL(a.href);toast("Đã tải "+fname)}
