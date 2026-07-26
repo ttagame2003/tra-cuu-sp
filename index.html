@@ -107,6 +107,14 @@
   .mcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
   .mcard.mid{border-color:#EAD3AE}
   .mcard.bad{border-color:#E6B5AE;background:#FFF9F8}
+  .mcard.retry-later{border-color:var(--mid);box-shadow:inset 4px 0 0 var(--mid)}
+  .mcard-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:7px}
+  .mcard-head .mvid{margin:3px 0 0;flex:1}
+  .mcard-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .mretry{padding:6px 9px;border-radius:7px;border:1px solid var(--line);background:#fff;font-family:var(--sans);font-size:11.5px;font-weight:700;color:var(--ink-soft);cursor:pointer;white-space:nowrap}
+  .mretry:hover{border-color:var(--accent);color:var(--ink)}
+  .mretry:disabled{opacity:.55;cursor:wait}
+  .mretry.later.active{background:var(--mid);border-color:var(--mid);color:#fff}
   .mcompare{display:flex;align-items:stretch;gap:10px;margin-bottom:10px}
   .mcol{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px}
   .mcol img{width:100%;max-width:220px;aspect-ratio:1/1;object-fit:cover;border-radius:9px;background:#EDEEF3;border:1px solid var(--line);cursor:pointer}
@@ -138,7 +146,7 @@
   .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:11px 20px;border-radius:10px;font-size:14px;font-weight:600;opacity:0;pointer-events:none;transition:.25s;z-index:9;max-width:90vw;text-align:center}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   footer{margin-top:28px;font-size:12.5px;color:var(--ink-soft);text-align:center;line-height:1.7}
-  @media(max-width:560px){body{padding:20px 13px 70px}h1{font-size:22px}.tag{width:100%}.grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}
+  @media(max-width:560px){body{padding:20px 13px 70px}h1{font-size:22px}.tag{width:100%}.grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}.mcard-head{flex-direction:column}.mcard-actions{justify-content:flex-start}}
   .gpreview{margin-top:14px;display:flex;flex-direction:column;gap:6px;max-height:340px;overflow:auto}
   .gprow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:9px;font-size:13px}
   .gprow.warn{border-color:#EAD3AE;background:#FFFDF8;color:var(--warn)}
@@ -376,6 +384,13 @@
 
   function prog(pct,txt){$("progwrap").style.display="block";$("progfill").style.width=Math.max(0,Math.min(100,pct))+"%";if(txt!=null)$("progtxt").textContent=txt}
 
+  async function matchVideoItem(it){
+    const {embs,thumb}=await embedVideo(it.file);
+    let best=null,second=-1;
+    imgEmb.forEach(p=>{let s=-1;for(const fe of embs){const c=cos(fe,p.emb);if(c>s)s=c}if(!best||s>best.score){second=best?best.score:-1;best={p,score:s}}else if(s>second)second=s});
+    return {video:it.name,file:it.file,handle:it.handle,videoThumb:thumb,best,second:second<0?0:second,embOK:embs.length>0};
+  }
+
   $("matchBtn").addEventListener("click",async()=>{
     if(!galFiles.length){toast("Chưa nạp ảnh ở thẻ Ảnh ↔ Link");return}
     if(!vidItems.length){toast("Chưa chọn video");return}
@@ -397,10 +412,7 @@
       for(let i=0;i<vidItems.length;i++){
         const it=vidItems[i];
         prog(20+78*i/vidItems.length,`Đang khớp video ${i+1}/${vidItems.length}...`);
-        const {embs,thumb}=await embedVideo(it.file);
-        let best=null,second=-1;
-        imgEmb.forEach(p=>{let s=-1;for(const fe of embs){const c=cos(fe,p.emb);if(c>s)s=c}if(!best||s>best.score){second=best?best.score:-1;best={p,score:s}}else if(s>second)second=s});
-        results.push({video:it.name,file:it.file,handle:it.handle,videoThumb:thumb,best,second:second<0?0:second,embOK:embs.length>0});
+        results.push(await matchVideoItem(it));
       }
       prog(100,"Xong");
       renderMatches(results);
@@ -415,7 +427,7 @@
     const note = margin<MARGIN_MIN ? " · sát ảnh nhì, dễ nhầm" : "";
     return {cls:"mid",label:"nên kiểm tra"+note};
   }
-  function renderMatches(results){
+  function renderMatches(results,focusResult){
     results.sort((a,b)=>((b.best?b.best.score:0)-(a.best?a.best.score:0)));  // cao xuống thấp
     window.__match=results;
     const box=$("mlist");box.innerHTML="";
@@ -426,10 +438,16 @@
       r._cls=cls;
       if(cls==="good")good++;else if(cls==="mid")mid++;else bad++;
       const opts=imgEmb.map(p=>`<option value="${p.id}" ${b&&p.id===b.p.id?"selected":""}>${esc((p.name||p.id).slice(0,60))}</option>`).join("");
-      const el=document.createElement("div");el.className="mcard"+(cls==="mid"?" mid":cls==="bad"?" bad":"");
+      const el=document.createElement("div");el.className="mcard"+(cls==="mid"?" mid":cls==="bad"?" bad":"")+(r.retryLater?" retry-later":"");
       el.dataset.i=i;el.dataset.cls=cls;
       el.innerHTML=
-        `<div class="mvid">${esc(r.video)}</div>`+
+        `<div class="mcard-head">`+
+          `<div class="mvid">${esc(r.video)}</div>`+
+          `<div class="mcard-actions">`+
+            `<button class="mretry" data-retry>Khớp lại</button>`+
+            `<button class="mretry later${r.retryLater?" active":""}" data-later>${r.retryLater?"✓ Đã chọn khớp lại sau":"Khớp lại sau"}</button>`+
+          `</div>`+
+        `</div>`+
         `<div class="mcompare">`+
           `<figure class="mcol"><img data-vid src="${r.videoThumb||""}" title="Bấm để mở video" alt=""><figcaption>Video</figcaption></figure>`+
           `<div class="marrow">↔</div>`+
@@ -459,6 +477,26 @@
       const pimg=card.querySelector("[data-img]");
       if(pimg)pimg.addEventListener("click",()=>{const p=results[i].best?results[i].best.p:null;if(p&&p.url)window.open(p.url,"_blank")});
       card.querySelector("[data-copy]").addEventListener("click",()=>{const p=results[i].best?results[i].best.p:null;if(!p)return;cp(p.aff||p.link);const btn=card.querySelector("[data-copy]");const o=btn.textContent;btn.textContent="✓";btn.classList.add("done");setTimeout(()=>{btn.textContent=o;btn.classList.remove("done")},1000)});
+      card.querySelector("[data-later]").addEventListener("click",()=>{
+        const r=results[i];r.retryLater=!r.retryLater;
+        card.classList.toggle("retry-later",r.retryLater);
+        const btn=card.querySelector("[data-later]");btn.classList.toggle("active",r.retryLater);btn.textContent=r.retryLater?"✓ Đã chọn khớp lại sau":"Khớp lại sau";
+        toast(r.retryLater?'Video này sẽ được chuyển vào "Can_khop_lai"':'Đã bỏ đánh dấu khớp lại sau');
+      });
+      card.querySelector("[data-retry]").addEventListener("click",async()=>{
+        const r=results[i],btn=card.querySelector("[data-retry]"),old=btn.textContent;
+        btn.disabled=true;btn.textContent="Đang khớp...";
+        try{
+          await ensureModel();
+          const fresh=await matchVideoItem({name:r.video,file:r.file,handle:r.handle});
+          r.videoThumb=fresh.videoThumb;r.best=fresh.best;r.second=fresh.second;r.embOK=fresh.embOK;r.manual=false;
+          renderMatches(results,r);
+          toast("Đã khớp lại video với danh sách ảnh");
+        }catch(e){
+          btn.disabled=false;btn.textContent=old;
+          toast("Không khớp lại được: "+(e.message||e));
+        }
+      });
     });
     $("mrhead").style.display="flex";$("mbar").style.display="flex";$("mfilter").style.display="flex";
     $("mOrganize").style.display=(vidDirHandle&&results.some(r=>r.handle))?"":"none";
@@ -466,7 +504,8 @@
     $("fn-all").textContent=results.length;$("fn-good").textContent=good;$("fn-mid").textContent=mid;$("fn-bad").textContent=bad;
     document.querySelectorAll("#mfilter .fbtn").forEach(x=>x.classList.toggle("active",x.dataset.f==="all"));
     applyFilter("all");
-    $("mrhead").scrollIntoView({behavior:"smooth",block:"start"});
+    if(focusResult){const i=results.indexOf(focusResult);const card=box.querySelector(`.mcard[data-i="${i}"]`);if(card)card.scrollIntoView({behavior:"smooth",block:"center"})}
+    else $("mrhead").scrollIntoView({behavior:"smooth",block:"start"});
   }
   function applyFilter(f){document.querySelectorAll("#mlist .mcard").forEach(c=>{c.style.display=(f==="all"||c.dataset.cls===f)?"":"none"})}
   document.querySelectorAll("#mfilter .fbtn").forEach(btn=>btn.addEventListener("click",()=>{document.querySelectorAll("#mfilter .fbtn").forEach(x=>x.classList.remove("active"));btn.classList.add("active");applyFilter(btn.dataset.f)}));
@@ -484,17 +523,18 @@
   }
   $("mOrganize").addEventListener("click",async()=>{
     if(!vidDirHandle){toast("Cần chọn video bằng nút 'Chọn thư mục video' để có quyền sắp xếp");return}
-    const rows=(window.__match||[]).filter(r=>r.handle&&r.best&&r.best.p&&r.best.p.id&&!r._moved);
+    const rows=(window.__match||[]).filter(r=>r.handle&&!r._moved&&(r.retryLater||(r.best&&r.best.p&&r.best.p.id)));
     if(!rows.length){toast("Không có video nào để sắp xếp");return}
-    if(!confirm(`Sẽ tạo thư mục theo ID và CHUYỂN ${rows.length} video vào (video rời khỏi thư mục gốc). Tiếp tục?`))return;
+    const laterCount=rows.filter(r=>r.retryLater).length;
+    if(!confirm(`Sẽ CHUYỂN ${rows.length} video: ${rows.length-laterCount} video vào thư mục theo ID${laterCount?` và ${laterCount} video vào "Can_khop_lai"`:""}. Video sẽ rời khỏi thư mục gốc. Tiếp tục?`))return;
     $("mOrganize").disabled=true;
     let ok=0,fail=0;
     for(const r of rows){
-      try{ await moveInto(vidDirHandle, r.handle, r.best.p.id); r._moved=true; ok++; }
+      try{ await moveInto(vidDirHandle, r.handle, r.retryLater?"Can_khop_lai":r.best.p.id); r._moved=true; ok++; }
       catch(e){ console.error(e); fail++; }
     }
     $("mOrganize").disabled=false;
-    toast(`Đã chuyển ${ok} video vào thư mục theo ID`+(fail?` · ${fail} lỗi`:""));
+    toast(`Đã chuyển ${ok} video vào thư mục theo ID / Can_khop_lai`+(fail?` · ${fail} lỗi`:""));
   });
 
   // ---- GOM THEO ID ----
