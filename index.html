@@ -150,6 +150,12 @@
   .gpreview{margin-top:14px;display:flex;flex-direction:column;gap:6px;max-height:340px;overflow:auto}
   .gprow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:9px;font-size:13px}
   .gprow.warn{border-color:#EAD3AE;background:#FFFDF8;color:var(--warn)}
+  .merge-pickers{display:grid;grid-template-columns:1fr;gap:9px;margin-top:14px}
+  .merge-pick{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px;border:1px solid var(--line);border-radius:10px;background:#FBFBFD}
+  .merge-label{width:118px;font-size:13px;font-weight:700;color:var(--ink)}
+  .merge-info{font-size:12.5px;color:var(--ink-soft);min-width:180px;flex:1}
+  .gprow.duplicate{border-color:#B9DAD3;background:#F4FBF9}
+  @media(min-width:720px){.merge-pickers{grid-template-columns:1fr 1fr}.merge-pick.output{grid-column:1/-1}}
 </style>
 </head>
 <body>
@@ -178,6 +184,7 @@
     <button class="tab" data-tab="lookup">Tra theo tên / ID</button>
     <button class="tab" data-tab="match">Khớp video ↔ ảnh (AI)</button>
     <button class="tab" data-tab="group">Gom theo ID</button>
+    <button class="tab" data-tab="merge">Gộp 2 thư mục</button>
   </div>
 
   <!-- gallery -->
@@ -261,6 +268,34 @@
       </div>
       <div id="groupPreview"></div>
       <button class="go" id="groupBtn" disabled style="margin-top:14px">📁 Gom vào thư mục theo ID</button>
+    </div>
+  </div>
+
+  <!-- merge two parent folders -->
+  <div class="panel" id="panel-merge">
+    <div class="card">
+      <div class="step-h"><span class="num">5</span><h2>Gộp hai thư mục tổng theo ID sản phẩm</h2></div>
+      <p class="hint">Mỗi thư mục nguồn chứa các thư mục con mang tên ID sản phẩm. Tool lấy đúng 19 số đầu của tên thư mục con, rồi sao chép toàn bộ video từ hai bên vào một thư mục ID duy nhất trong thư mục đích. Hai thư mục nguồn được giữ nguyên; file trùng tên sẽ tự thêm số, không ghi đè.</p>
+      <div class="merge-pickers">
+        <div class="merge-pick">
+          <span class="merge-label">Thư mục tổng 1</span>
+          <button class="btn primary" id="pickMergeA">Chọn thư mục 1</button>
+          <span class="merge-info" id="mergeAInfo">Chưa chọn</span>
+        </div>
+        <div class="merge-pick">
+          <span class="merge-label">Thư mục tổng 2</span>
+          <button class="btn primary" id="pickMergeB">Chọn thư mục 2</button>
+          <span class="merge-info" id="mergeBInfo">Chưa chọn</span>
+        </div>
+        <div class="merge-pick output">
+          <span class="merge-label">Thư mục đích</span>
+          <button class="btn" id="pickMergeOut">Chọn nơi lưu kết quả</button>
+          <span class="merge-info" id="mergeOutInfo">Chưa chọn · nên chọn một thư mục trống</span>
+        </div>
+      </div>
+      <div id="mergePreview"></div>
+      <button class="go" id="mergeBtn" disabled style="margin-top:14px">Gộp video từ 2 thư mục theo ID</button>
+      <div class="progwrap" id="mergeProgWrap"><div class="progbar"><div class="progfill" id="mergeProgFill"></div></div><div class="progtxt" id="mergeProgText"></div></div>
     </div>
   </div>
 
@@ -590,6 +625,116 @@
     $("groupBtn").disabled=false;
     renderGroupPreview();
     toast(`Đã gom ${ok} file vào thư mục theo ID`+(fail?` · ${fail} lỗi`:""));
+  });
+
+  // ---- GỘP HAI THƯ MỤC TỔNG THEO ID ----
+  let mergeDirA=null,mergeDirB=null,mergeOutDir=null;
+  let mergeDataA=null,mergeDataB=null,mergeHasRun=false;
+
+  async function scanMergeSource(dir){
+    const groups={};let folderCount=0,videoCount=0,ignored=0;
+    for await(const [folderName,folderHandle] of dir.entries()){
+      if(folderHandle.kind!=="directory")continue;
+      const id=extractId(folderName);
+      if(!id){ignored++;continue}
+      folderCount++;
+      const list=groups[id]=groups[id]||[];
+      for await(const [name,fileHandle] of folderHandle.entries()){
+        if(fileHandle.kind!=="file"||!VID_RE.test(name))continue;
+        list.push({name,handle:fileHandle,sourceFolder:folderName});
+        videoCount++;
+      }
+    }
+    return {groups,folderCount,videoCount,ignored};
+  }
+
+  async function pickMergeSource(which){
+    if(!window.showDirectoryPicker){toast("Cần Chrome hoặc Edge trên máy tính");return}
+    let dir;try{dir=await window.showDirectoryPicker({mode:"read"})}catch(e){return}
+    const info=$(which==="A"?"mergeAInfo":"mergeBInfo");
+    info.textContent="Đang đọc thư mục...";
+    try{
+      const data=await scanMergeSource(dir);
+      if(which==="A"){mergeDirA=dir;mergeDataA=data}else{mergeDirB=dir;mergeDataB=data}
+      info.textContent=`${dir.name} · ${data.folderCount} ID · ${data.videoCount} video`+(data.ignored?` · bỏ qua ${data.ignored} thư mục không có ID`:"");
+      mergeHasRun=false;renderMergePreview();
+    }catch(e){info.textContent="Không đọc được thư mục";toast("Không đọc được thư mục nguồn")}
+  }
+  $("pickMergeA").addEventListener("click",()=>pickMergeSource("A"));
+  $("pickMergeB").addEventListener("click",()=>pickMergeSource("B"));
+  $("pickMergeOut").addEventListener("click",async()=>{
+    if(!window.showDirectoryPicker){toast("Cần Chrome hoặc Edge trên máy tính");return}
+    let dir;try{dir=await window.showDirectoryPicker({mode:"readwrite"})}catch(e){return}
+    mergeOutDir=dir;mergeHasRun=false;
+    $("mergeOutInfo").textContent=dir.name+" · kết quả sẽ được tạo tại đây";
+    renderMergePreview();
+  });
+
+  function renderMergePreview(){
+    const box=$("mergePreview");
+    if(!mergeDataA||!mergeDataB){
+      box.innerHTML='<div class="empty">Chọn đủ hai thư mục tổng để xem các ID sẽ được gộp.</div>';
+      $("mergeBtn").disabled=true;return;
+    }
+    const ids=[...new Set([...Object.keys(mergeDataA.groups),...Object.keys(mergeDataB.groups)])].sort();
+    const duplicateIds=ids.filter(id=>(mergeDataA.groups[id]||[]).length&&(mergeDataB.groups[id]||[]).length);
+    const totalVideos=ids.reduce((n,id)=>n+(mergeDataA.groups[id]||[]).length+(mergeDataB.groups[id]||[]).length,0);
+    let html=`<div class="status ok" style="display:block">${ids.length} ID sau khi gộp · ${totalVideos} video · ${duplicateIds.length} ID xuất hiện ở cả hai thư mục</div><div class="gpreview">`;
+    ids.forEach(id=>{
+      const a=(mergeDataA.groups[id]||[]).length,b=(mergeDataB.groups[id]||[]).length;
+      html+=`<div class="gprow${a&&b?" duplicate":""}"><span class="gid">${id}</span><span>Thư mục 1: ${a} · Thư mục 2: ${b} · Tổng: ${a+b}</span></div>`;
+    });
+    box.innerHTML=html+"</div>";
+    $("mergeBtn").disabled=!(mergeDirA&&mergeDirB&&mergeOutDir&&totalVideos);
+  }
+
+  async function sameDirectory(a,b){
+    if(!a||!b||typeof a.isSameEntry!=="function")return false;
+    try{return await a.isSameEntry(b)}catch(e){return false}
+  }
+  async function uniqueFileName(dir,name){
+    const dot=name.lastIndexOf("."),base=dot>0?name.slice(0,dot):name,ext=dot>0?name.slice(dot):"";
+    let candidate=name,n=2;
+    while(true){
+      try{await dir.getFileHandle(candidate);candidate=`${base} (${n++})${ext}`}
+      catch(e){if(e&&e.name==="NotFoundError")return candidate;throw e}
+    }
+  }
+  async function copyMergeVideo(outDir,id,item){
+    const sub=await outDir.getDirectoryHandle(id,{create:true});
+    const targetName=await uniqueFileName(sub,item.name);
+    const source=await item.handle.getFile();
+    const target=await sub.getFileHandle(targetName,{create:true});
+    const writable=await target.createWritable();
+    await writable.write(source);await writable.close();
+  }
+  function mergeProgress(done,total,text){
+    $("mergeProgWrap").style.display="block";
+    $("mergeProgFill").style.width=(total?100*done/total:0)+"%";
+    $("mergeProgText").textContent=text;
+  }
+
+  $("mergeBtn").addEventListener("click",async()=>{
+    if(!mergeDirA||!mergeDirB||!mergeOutDir||!mergeDataA||!mergeDataB){toast("Cần chọn đủ 2 thư mục nguồn và thư mục đích");return}
+    if(await sameDirectory(mergeDirA,mergeDirB)){toast("Hai thư mục nguồn đang là cùng một thư mục");return}
+    if(await sameDirectory(mergeOutDir,mergeDirA)||await sameDirectory(mergeOutDir,mergeDirB)){toast("Thư mục đích phải khác hai thư mục nguồn");return}
+    const ids=[...new Set([...Object.keys(mergeDataA.groups),...Object.keys(mergeDataB.groups)])].sort();
+    const jobs=[];ids.forEach(id=>{(mergeDataA.groups[id]||[]).forEach(item=>jobs.push({id,item}));(mergeDataB.groups[id]||[]).forEach(item=>jobs.push({id,item}))});
+    if(!jobs.length){toast("Không có video để gộp");return}
+    const again=mergeHasRun?" Bạn đã chạy gộp một lần; chạy tiếp sẽ tạo thêm bản có đánh số.":"";
+    if(!confirm(`Sẽ SAO CHÉP ${jobs.length} video vào ${ids.length} thư mục ID trong "${mergeOutDir.name}". Hai thư mục nguồn được giữ nguyên.${again} Tiếp tục?`))return;
+    $("mergeBtn").disabled=true;
+    let ok=0,fail=0;
+    mergeProgress(0,jobs.length,`Đang gộp 0/${jobs.length} video...`);
+    for(let i=0;i<jobs.length;i++){
+      const job=jobs[i];
+      try{await copyMergeVideo(mergeOutDir,job.id,job.item);ok++}
+      catch(e){console.error(e);fail++}
+      mergeProgress(i+1,jobs.length,`Đang gộp ${i+1}/${jobs.length} video...`);
+    }
+    mergeHasRun=true;$("mergeBtn").disabled=false;
+    mergeProgress(jobs.length,jobs.length,`Hoàn tất: ${ok} video đã sao chép`+(fail?` · ${fail} lỗi`:""));
+    toast(`Đã gộp ${ok} video vào ${ids.length} thư mục ID`+(fail?` · ${fail} lỗi`:""));
   });
 
   // ---- shared ----
