@@ -155,6 +155,16 @@
   .merge-label{width:118px;font-size:13px;font-weight:700;color:var(--ink)}
   .merge-info{font-size:12.5px;color:var(--ink-soft);min-width:180px;flex:1}
   .gprow.duplicate{border-color:#B9DAD3;background:#F4FBF9}
+  .gprow.only-one{opacity:.45}
+  .merge-mode{display:flex;align-items:center;gap:12px;margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#FBFBFD}
+  .merge-mode-label{font-size:13.5px;font-weight:700;color:var(--ink)}
+  .toggle{position:relative;width:44px;height:24px;flex:none}
+  .toggle input{opacity:0;width:0;height:0}
+  .toggle .slider{position:absolute;inset:0;background:#ccc;border-radius:24px;cursor:pointer;transition:.25s}
+  .toggle .slider::before{content:"";position:absolute;width:18px;height:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.25s}
+  .toggle input:checked+.slider{background:var(--accent)}
+  .toggle input:checked+.slider::before{transform:translateX(20px)}
+  .merge-mode-desc{font-size:12.5px;color:var(--ink-soft);flex:1}
   @media(min-width:720px){.merge-pickers{grid-template-columns:1fr 1fr}.merge-pick.output{grid-column:1/-1}}
 </style>
 </head>
@@ -292,6 +302,13 @@
           <button class="btn" id="pickMergeOut">Chọn nơi lưu kết quả</button>
           <span class="merge-info" id="mergeOutInfo">Chưa chọn · nên chọn một thư mục trống</span>
         </div>
+      </div>
+      <div class="merge-mode">
+        <span class="merge-mode-label">Chế độ gộp:</span>
+        <span style="font-size:13px;font-weight:600;color:var(--ink)">Gộp hết</span>
+        <label class="toggle"><input type="checkbox" id="mergeOnlyDup"><span class="slider"></span></label>
+        <span style="font-size:13px;font-weight:600;color:var(--accent)">Chỉ trùng ID</span>
+        <span class="merge-mode-desc" id="mergeModeDesc">Gộp tất cả ID từ cả hai thư mục</span>
       </div>
       <div id="mergePreview"></div>
       <button class="go" id="mergeBtn" disabled style="margin-top:14px">Gộp video từ 2 thư mục theo ID</button>
@@ -670,23 +687,41 @@
     renderMergePreview();
   });
 
+  function getMergeOnlyDup(){return $("mergeOnlyDup").checked}
+  function getMergeIds(){
+    if(!mergeDataA||!mergeDataB)return[];
+    const all=[...new Set([...Object.keys(mergeDataA.groups),...Object.keys(mergeDataB.groups)])].sort();
+    if(getMergeOnlyDup())return all.filter(id=>(mergeDataA.groups[id]||[]).length&&(mergeDataB.groups[id]||[]).length);
+    return all;
+  }
   function renderMergePreview(){
     const box=$("mergePreview");
     if(!mergeDataA||!mergeDataB){
       box.innerHTML='<div class="empty">Chọn đủ hai thư mục tổng để xem các ID sẽ được gộp.</div>';
       $("mergeBtn").disabled=true;return;
     }
-    const ids=[...new Set([...Object.keys(mergeDataA.groups),...Object.keys(mergeDataB.groups)])].sort();
-    const duplicateIds=ids.filter(id=>(mergeDataA.groups[id]||[]).length&&(mergeDataB.groups[id]||[]).length);
+    const onlyDup=getMergeOnlyDup();
+    const allIds=[...new Set([...Object.keys(mergeDataA.groups),...Object.keys(mergeDataB.groups)])].sort();
+    const duplicateIds=allIds.filter(id=>(mergeDataA.groups[id]||[]).length&&(mergeDataB.groups[id]||[]).length);
+    const ids=onlyDup?duplicateIds:allIds;
     const totalVideos=ids.reduce((n,id)=>n+(mergeDataA.groups[id]||[]).length+(mergeDataB.groups[id]||[]).length,0);
-    let html=`<div class="status ok" style="display:block">${ids.length} ID sau khi gộp · ${totalVideos} video · ${duplicateIds.length} ID xuất hiện ở cả hai thư mục</div><div class="gpreview">`;
-    ids.forEach(id=>{
+    const skipped=allIds.length-ids.length;
+    let summary=`${ids.length} ID sẽ gộp · ${totalVideos} video · ${duplicateIds.length} ID trùng cả hai`;
+    if(onlyDup&&skipped)summary+=` · <span style="color:var(--warn)">${skipped} ID chỉ có 1 bên → bỏ qua</span>`;
+    let html=`<div class="status ok" style="display:block">${summary}</div><div class="gpreview">`;
+    allIds.forEach(id=>{
       const a=(mergeDataA.groups[id]||[]).length,b=(mergeDataB.groups[id]||[]).length;
-      html+=`<div class="gprow${a&&b?" duplicate":""}"><span class="gid">${id}</span><span>Thư mục 1: ${a} · Thư mục 2: ${b} · Tổng: ${a+b}</span></div>`;
+      const isDup=a&&b;
+      const isSkipped=onlyDup&&!isDup;
+      html+=`<div class="gprow${isDup?" duplicate":""}${isSkipped?" only-one":""}"><span class="gid">${id}</span><span>Thư mục 1: ${a} · Thư mục 2: ${b}${isSkipped?" · bỏ qua":""}</span></div>`;
     });
     box.innerHTML=html+"</div>";
     $("mergeBtn").disabled=!(mergeDirA&&mergeDirB&&mergeOutDir&&totalVideos);
   }
+  $("mergeOnlyDup").addEventListener("change",()=>{
+    $("mergeModeDesc").textContent=getMergeOnlyDup()?"Chỉ gộp ID xuất hiện ở cả hai thư mục":"Gộp tất cả ID từ cả hai thư mục";
+    renderMergePreview();
+  });
 
   async function sameDirectory(a,b){
     if(!a||!b||typeof a.isSameEntry!=="function")return false;
@@ -718,7 +753,7 @@
     if(!mergeDirA||!mergeDirB||!mergeOutDir||!mergeDataA||!mergeDataB){toast("Cần chọn đủ 2 thư mục nguồn và thư mục đích");return}
     if(await sameDirectory(mergeDirA,mergeDirB)){toast("Hai thư mục nguồn đang là cùng một thư mục");return}
     if(await sameDirectory(mergeOutDir,mergeDirA)||await sameDirectory(mergeOutDir,mergeDirB)){toast("Thư mục đích phải khác hai thư mục nguồn");return}
-    const ids=[...new Set([...Object.keys(mergeDataA.groups),...Object.keys(mergeDataB.groups)])].sort();
+    const ids=getMergeIds();
     const jobs=[];ids.forEach(id=>{(mergeDataA.groups[id]||[]).forEach(item=>jobs.push({id,item}));(mergeDataB.groups[id]||[]).forEach(item=>jobs.push({id,item}))});
     if(!jobs.length){toast("Không có video để gộp");return}
     const again=mergeHasRun?" Bạn đã chạy gộp một lần; chạy tiếp sẽ tạo thêm bản có đánh số.":"";
